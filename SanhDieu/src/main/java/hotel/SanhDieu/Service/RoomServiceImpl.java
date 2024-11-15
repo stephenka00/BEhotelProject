@@ -6,17 +6,17 @@ import hotel.SanhDieu.Exception.ResourceNotFoundException;
 import hotel.SanhDieu.Model.Room;
 import hotel.SanhDieu.Repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
-import org.hibernate.Internal;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.sql.rowset.serial.SerialBlob;
-import javax.swing.text.html.Option;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Blob;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,7 +33,7 @@ public class RoomServiceImpl implements RoomServiceInterface{
     public Room addNewRoom(MultipartFile file, String roomType, BigDecimal roomPrice)throws IOException, SQLException {
         Room room = new Room();
         room.setRoomType(roomType);
-        room.setPricePerNight(roomPrice);
+        room.setRoomPrice(roomPrice);
         if(!file.isEmpty()){
             byte[] photoBytes = file.getBytes();
             Blob photoBlob = new SerialBlob(photoBytes);
@@ -108,6 +108,11 @@ public class RoomServiceImpl implements RoomServiceInterface{
     @Override
     public Optional<Room> getRoomById(Long roomId) {
         return Optional.of(roomRepository.findById(roomId).get());
+    }
+
+    @Override
+    public List<Room> getAvailableRooms(LocalDate checkInDate, LocalDate checkOutDate, String roomType) {
+        return roomRepository.findAvailableRoomsByDateAndType(checkInDate,checkOutDate,roomType);
     }
 
 }

@@ -6,13 +6,15 @@ import hotel.SanhDieu.Exception.PhotoRetrievalException;
 import hotel.SanhDieu.Exception.ResourceNotFoundException;
 import hotel.SanhDieu.Model.BookedRoom;
 import hotel.SanhDieu.Model.Room;
+import hotel.SanhDieu.Response.BookingResponse;
 import hotel.SanhDieu.Response.RoomResponse;
 import hotel.SanhDieu.Service.BookingServiceImpl;
 import hotel.SanhDieu.Service.RoomServiceInterface;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,26 +23,27 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Blob;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.*;
 
 @RestController
 @RequestMapping("/rooms")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:5173")
 public class RoomController {
-    @Autowired
-    private RoomServiceInterface roomService;
-    @Autowired
-    private BookingServiceImpl bookingService;
+
+    private final RoomServiceInterface roomService;
+
+    private final BookingServiceImpl bookingService;
 
     // Phương thức thêm phòng mới với đầy đủ thông tin
     @PostMapping("/add/new-room")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<RoomResponse> addNewRoom(
             @RequestParam("photo") MultipartFile photo
             , @RequestParam("roomType") String roomType
             , @RequestParam("roomPrice") BigDecimal roomPrice) throws SQLException, IOException {
         Room savedRoom = roomService.addNewRoom(photo, roomType, roomPrice);
-        RoomResponse response = new RoomResponse(savedRoom.getPricePerNight(),
+        RoomResponse response = new RoomResponse(savedRoom.getRoomPrice(),
                 savedRoom.getRoomType()
                 , savedRoom.getId());
         return ResponseEntity.ok(response);
@@ -54,12 +57,10 @@ public class RoomController {
     @PostMapping("/add/room-type")
     public ResponseEntity<String> addRoomType(@RequestBody Map<String, String> request) {
         String roomType = request.get("roomType");
-
         // Validate the input
         if (roomType == null || roomType.isEmpty()) {
             return ResponseEntity.badRequest().body("Room type cannot be empty");
         }
-
         try {
             // Call the service to add the room type
             Room newRoom = roomService.addRoomType(roomType);
@@ -89,11 +90,13 @@ public class RoomController {
         return ResponseEntity.ok(roomResponses);
     }
     @DeleteMapping("/delete/room/{roomId}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<Void> deleteRoom(@PathVariable Long roomId){
         roomService.deleteRoom(roomId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
     @PutMapping("/update/{roomId}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<RoomResponse> updateRoom(Long roomId,@RequestParam(required = false) String roomType,
                                                    @RequestParam(required = false)BigDecimal roomPrice,
                                                    @RequestParam(required = false)MultipartFile photo) throws IOException, SQLException, InternalServerException {
@@ -115,14 +118,36 @@ public class RoomController {
             return ResponseEntity.ok(Optional.of(roomResponse));
         }).orElseThrow(() -> new ResourceNotFoundException("Room not found"));
     }
+    @GetMapping("/available-rooms")
+    public ResponseEntity<List<RoomResponse>> getAvailableRooms(
+            @RequestParam("checkInDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkInDate
+            ,@RequestParam("checkOutDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOutDate
+            ,@RequestParam("roomType") String roomType) throws SQLException {
+        List<Room> availableRooms = roomService.getAvailableRooms(checkInDate,checkOutDate,roomType);
+        List<RoomResponse> roomResponses = new ArrayList<>();
+        for(Room room : availableRooms){
+            byte[] photoBytes = roomService.getRoomPhotoByRoomId(room.getId());
+            if(photoBytes != null & photoBytes.length > 0){
+                String photoBase64 = Base64.getEncoder().encodeToString(photoBytes);
+                RoomResponse roomResponse = getRoomResponse(room);
+                roomResponse.setPhoto(photoBase64);
+                roomResponses.add(roomResponse);
+            }
+        }
+        if(roomResponses.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }else{
+            return ResponseEntity.ok(roomResponses);
+        }
+    }
     private RoomResponse getRoomResponse(Room room) {
         List<BookedRoom> bookings = getAllBookingsByRoomId(room.getId());
-        /*List<BookingResponse> bookingInfo = bookings
+        List<BookingResponse> bookingInfo = bookings
                 .stream()
                 .map(booking -> new BookingResponse(booking.getBookingId()
                         ,booking.getCheckInDate()
                         ,booking.getCheckOutDate()
-                        ,booking.getBookingConfirmationCode())).toList();*/
+                        ,booking.getBookingConfirmationCode())).toList();
         byte[] photoBytes = null;
         Blob photoBlob = room.getPhoto();
         if(photoBlob != null){
@@ -135,9 +160,9 @@ public class RoomController {
         }
         return new RoomResponse(room.getId()
                 ,room.getRoomType()
-                ,room.getPricePerNight()
+                ,room.getRoomPrice()
                 ,room.isBooked()
-                ,photoBytes);
+                ,photoBytes,bookingInfo);
     }
 
     private List<BookedRoom> getAllBookingsByRoomId(Long roomId) {

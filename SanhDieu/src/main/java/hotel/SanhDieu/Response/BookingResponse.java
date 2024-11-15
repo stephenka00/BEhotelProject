@@ -13,8 +13,6 @@ import java.time.LocalDateTime;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-//dùng để trả về thông tin phòng sau khi phòng đã được
-// lưu trong cơ sở dữ liệu, bao gồm cả thông tin liên quan đến việc đã được đặt hay chưa.
 public class BookingResponse {
     private Long id;
 
@@ -46,4 +44,22 @@ public class BookingResponse {
         this.checkOutDate = checkOutDate;
         this.bookingConfirmationCode = bookingConfirmationCode;
     }
+
+    public BookingResponse( Long bookingId,LocalDate checkOutDate, LocalDate checkInDate, String guestFullName
+            , String guestEmail
+            , int numOfAdults
+            , int numOfChildren, int totalNumOfGuest, String bookingConfirmationCode, RoomResponse room) {
+        this.checkOutDate = checkOutDate;
+        this.id = bookingId;
+        this.checkInDate = checkInDate;
+        this.guestFullName = guestFullName;
+        this.guestEmail = guestEmail;
+        NumOfAdults = numOfAdults;
+        NumOfChildren = numOfChildren;
+        TotalNumOfGuest = totalNumOfGuest;
+        this.bookingConfirmationCode = bookingConfirmationCode;
+        this.room = room;
+    }
+
+
 }
